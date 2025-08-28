@@ -7,11 +7,11 @@ from matplotlib.table import Table
 import re
 from google.cloud import storage
 from io import BytesIO
-from config import TELEGRAM_TOKEN, TELEGRAM_CHAT_ID
+from config import TELEGRAM_TOKEN_TEST, TELEGRAM_CHAT_ID_TEST
 
 # --- Configuración ---
-BOT_TOKEN = TELEGRAM_TOKEN
-CHANNEL_ID = TELEGRAM_CHAT_ID
+BOT_TOKEN = TELEGRAM_TOKEN_TEST
+CHANNEL_ID = TELEGRAM_CHAT_ID_TEST
 BUCKET_NAME = "fantasy-laliga-datos"
 FOLDER_PATH = "fantasy_marca"
 FILE_BLOB = f"{FOLDER_PATH}/KPIs_Fantasy_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
@@ -151,3 +151,4 @@ def run():
 
 if __name__ == "__main__":
     run()
+
