@@ -5,7 +5,7 @@ FROM python:3.10-slim
 WORKDIR /app
 
 # Copia requirements.txt y luego instala dependencias
-COPY scripts-onlines/requirements.txt .
+COPY requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
