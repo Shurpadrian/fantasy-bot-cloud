@@ -90,7 +90,7 @@ def descargar_desde_gcs(bucket_name, blob_name):
         print(f"❌ Error descargando archivo desde GCS: {e}")
         return None
     stream.seek(0)
-    return pd.read_excel(stream)
+    return pd.read_excel(stream, sheet_name=None)
 
 def enviar_imagen_telegram(file_path, caption=""):
     with open(file_path, "rb") as f:
@@ -142,7 +142,7 @@ def generar_y_enviar_informe():
             "#Fantasy #LaLiga #Analisis"
         )
         enviar_mensaje_canal(mensaje_principal, archivo=None)
-        enviar_tablas_excel_como_imagenes(pd.read_excel(BytesIO(df_excel), sheet_name=None))
+        enviar_tablas_excel_como_imagenes(df_excel)
     else:
         enviar_mensaje_canal("Error: No se generó el archivo de informe")
 
@@ -151,4 +151,3 @@ def run():
 
 if __name__ == "__main__":
     run()
-
