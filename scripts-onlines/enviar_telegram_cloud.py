@@ -157,9 +157,6 @@ def run():
     generar_y_enviar_informe()
 
 if __name__ == "__main__":
-    # Ejecutar el bot en un hilo para que no bloquee Flask
-    from threading import Thread
     Thread(target=run).start()
-
-    # Ejecutar el servidor web Flask que escucha en puerto 8080 para Cloud Run
-    app.run(host='0.0.0.0', port=8080)
+    port = int(os.getenv("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
