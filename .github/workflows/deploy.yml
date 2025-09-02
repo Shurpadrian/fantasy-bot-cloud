@@ -1,0 +1,45 @@
+name: Deploy fantasy-bot to Google Cloud Run
+
+on:
+  push:
+    branches:
+      - main  # Cambia a tu rama principal si es distinta
+
+env:
+  GCP_PROJECT_ID: fantasy-laliga-project  # Cambia por tu ID real
+  REGION: europe-west1                   # Ajusta la región si es distinta
+  SERVICE_NAME: deploy-fantasy-bot        # El nombre de tu servicio en Cloud Run
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Google Cloud SDK
+      uses: google-github-actions/setup-gcloud@v1
+      with:
+        project_id: ${{ env.GCP_PROJECT_ID }}
+        service_account_key: ${{ secrets.GCP_SA_KEY }}
+
+    - name: Auth Docker to Google Cloud
+      run: |
+        gcloud auth configure-docker
+
+    - name: Build Docker image
+      run: |
+        docker build -t gcr.io/${{ env.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }} .
+
+    - name: Push Docker image
+      run: |
+        docker push gcr.io/${{ env.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}
+
+    - name: Deploy to Cloud Run
+      run: |
+        gcloud run deploy ${{ env.SERVICE_NAME }} \
+          --image gcr.io/${{ env.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }} \
+          --region ${{ env.REGION }} \
+          --platform managed \
+          --allow-unauthenticated
