@@ -7,10 +7,19 @@ from matplotlib.table import Table
 import re
 from google.cloud import storage
 from io import BytesIO
+from flask import Flask
+from threading import Thread
 
-# --- Configuración ---
-BOT_TOKEN = "7563800348:AAFKkYh0YG4IAcMXgV1eVkk3DokiQxKHYd8"
-CHANNEL_ID = "-1002666781529"
+# --- Configuración Tokens basados en entorno ---
+ENVIRONMENT = os.getenv('ENVIRONMENT', 'prod')  # Valor por defecto 'prod'
+
+if ENVIRONMENT == 'test':
+    BOT_TOKEN = os.getenv('TELEGRAM_TOKEN_TEST')
+    CHANNEL_ID = os.getenv('TELEGRAM_CHAT_ID_TEST')
+else:
+    BOT_TOKEN = os.getenv('TELEGRAM_TOKEN')
+    CHANNEL_ID = os.getenv('TELEGRAM_CHAT_ID')
+
 BUCKET_NAME = "fantasy-laliga-datos"
 FOLDER_PATH = "fantasy_marca"
 FILE_BLOB = f"{FOLDER_PATH}/KPIs_Fantasy_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
@@ -18,6 +27,8 @@ FILE_BLOB = f"{FOLDER_PATH}/KPIs_Fantasy_{datetime.now().strftime('%Y-%m-%d')}.x
 # Carpeta local temporal para imágenes
 IMG_DIR = "img_temp"
 os.makedirs(IMG_DIR, exist_ok=True)
+
+app = Flask(__name__)
 
 def limpiar_nombre_archivo(nombre):
     nombre_limpio = re.sub(r'[^\w\s-]', '_', nombre)
@@ -44,27 +55,21 @@ def color_celda(valor, columna):
 
 def df_a_imagen(df, nombre_hoja, file_path):
     df.columns = [str(col).upper() for col in df.columns]
-
     fig_width = min(25, max(8, len(df.columns)*2.5))
     fig_height = min(18, max(5, len(df)*0.4))
     fig, ax = plt.subplots(figsize=(fig_width, fig_height))
     ax.axis('off')
-
     tabla = Table(ax, bbox=[0, 0, 1, 1])
-
     n_cols = len(df.columns)
     n_rows = len(df)
-
     width = 1.0 / n_cols
-    height = 1.0 / (n_rows + 1)  # +1 para fila header
-
+    height = 1.0 / (n_rows + 1)
     header_color = '#4CAF50'
     for i, col in enumerate(df.columns):
         cell = tabla.add_cell(0, i, width, height, text=col, loc='center', facecolor=header_color)
         cell.get_text().set_color('white')
         cell.get_text().set_fontweight('bold')
         cell.get_text().set_fontsize(12)
-
     for row in range(n_rows):
         for col in range(n_cols):
             valor = df.iat[row, col]
@@ -72,7 +77,6 @@ def df_a_imagen(df, nombre_hoja, file_path):
             facecolor = color_celda(valor, col_name)
             cell = tabla.add_cell(row + 1, col, width, height, text=str(valor), loc='center', facecolor=facecolor)
             cell.get_text().set_fontsize(10)
-
     ax.add_table(tabla)
     plt.title(nombre_hoja.upper(), fontsize=16, fontweight='bold', pad=20)
     plt.savefig(file_path, bbox_inches='tight', dpi=220)
@@ -89,7 +93,7 @@ def descargar_desde_gcs(bucket_name, blob_name):
         print(f"❌ Error descargando archivo desde GCS: {e}")
         return None
     stream.seek(0)
-    return pd.read_excel(stream)
+    return pd.read_excel(stream, sheet_name=None)
 
 def enviar_imagen_telegram(file_path, caption=""):
     with open(file_path, "rb") as f:
@@ -141,12 +145,21 @@ def generar_y_enviar_informe():
             "#Fantasy #LaLiga #Analisis"
         )
         enviar_mensaje_canal(mensaje_principal, archivo=None)
-        enviar_tablas_excel_como_imagenes(pd.read_excel(BytesIO(df_excel), sheet_name=None))
+        enviar_tablas_excel_como_imagenes(df_excel)
     else:
         enviar_mensaje_canal("Error: No se generó el archivo de informe")
+
+@app.route('/')
+def home():
+    return "Bot Fantasy LaLiga is running"
 
 def run():
     generar_y_enviar_informe()
 
 if __name__ == "__main__":
-    run()
+    # Ejecutar el bot en un hilo para que no bloquee Flask
+    from threading import Thread
+    Thread(target=run).start()
+
+    # Ejecutar el servidor web Flask que escucha en puerto 8080 para Cloud Run
+    app.run(host='0.0.0.0', port=8080)
