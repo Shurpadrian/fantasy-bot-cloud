@@ -1,48 +1,64 @@
-name: Deploy fantasy-bot to Google Cloud Run
+name: Fantasy diario (Python)
 
 on:
-  push:
-    branches:
-      - main  # Cambia a tu rama principal si es distinta
-
-env:
-  GCP_PROJECT_ID: fantasy-laliga-project  # Cambia por tu ID real
-  REGION: europe-west1                   # Ajusta la región si es distinta
-  SERVICE_NAME: deploy-fantasy-bot        # El nombre de tu servicio en Cloud Run
+  schedule:
+    - cron: "0 6 * * *"   # 08:00 en Madrid en verano, 07:00 en invierno
+  workflow_dispatch:
 
 jobs:
-  build-and-deploy:
+  run:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    concurrency:
+      group: fantasy-daily
+      cancel-in-progress: false
+    env:
+      TZ: Europe/Madrid
+      # Ajusta estos nombres a tus secrets reales:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+      # Pon aquí cualquier otra variable que uses (API keys, etc.)
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v1
+      - name: Python 3.11 + caché
+        uses: actions/setup-python@v5
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          python-version: "3.11"
+          cache: "pip"
 
-      - name: Set up Google Cloud SDK
-        uses: google-github-actions/setup-gcloud@v1
+      - name: Instalar dependencias
+        if: hashFiles('requirements.txt') != ''
+        run: pip install -r requirements.txt
+
+      # Descomenta si haces scraping con Playwright
+      # - name: Playwright browsers
+      #   run: |
+      #     pip install playwright
+      #     python -m playwright install --with-deps
+
+      - name: Tests (opcional)
+        if: hashFiles('tests/**') != ''
+        run: |
+          pip install pytest
+          pytest -q
+
+      - name: Ejecutar lanzador
+        run: |
+          set -e
+          for i in 1 2 3; do
+            python lanzador_fantasy_cloud.py && break || {
+              echo "Intento $i fallido; reintento en 15s…"
+              sleep 15
+            }
+          done
+
+      - name: Subir resultados (si generas ficheros)
+        if: always() && hashFiles('output/**') != ''
+        uses: actions/upload-artifact@v4
         with:
-          project_id: ${{ env.GCP_PROJECT_ID }}
-
-      - name: Auth Docker to Google Cloud
-        run: |
-          gcloud auth configure-docker
-
-      - name: Build Docker image
-        run: |
-          docker build -t gcr.io/${{ env.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }} .
-
-      - name: Push Docker image
-        run: |
-          docker push gcr.io/${{ env.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}
-
-      - name: Deploy to Cloud Run
-        run: |
-          gcloud run deploy ${{ env.SERVICE_NAME }} \
-            --image gcr.io/${{ env.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }} \
-            --region ${{ env.REGION }} \
-            --platform managed \
-            --allow-unauthenticated
+          name: resultados-fantasy
+          path: output/**
+          if-no-files-found: ignore
